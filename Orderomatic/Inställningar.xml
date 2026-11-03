@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Settings>
+	<Log>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\log.txt</Log>
+
+	<Directory>
+		<Name>Bilder</Name>
+		<Input>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\Downloads</Input>
+		<Output>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\Bilder</Output>
+		<Type>.jpg</Type>
+		<Type>.jpeg</Type>
+		<Type>.png</Type>
+	</Directory>
+
+	<Directory>
+		<Name>Dokument</Name>
+		<Input>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\Downloads</Input>
+		<Output>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\Dokument</Output>
+		<Type>.md</Type>
+		<Type>.txt</Type>
+		<Type>.pdf</Type>
+	</Directory>
+</Settings>

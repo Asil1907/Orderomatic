@@ -1,0 +1,283 @@
+
+using System.Xml.Linq;
+
+internal class Program
+{
+    private static Settings? currentSettings;
+    private static List<FileSystemWatcher> currentWatchers = new();
+    private static DateTime sistaOmladdning = DateTime.MinValue;
+    private static FileSystemWatcher? configWatcher;
+
+    private static int Main(string[] args)
+    {
+        //Sökvägen till inställningsfilen skapas från programmets mapp.
+        var inställningsSökväg = Path.Combine(AppContext.BaseDirectory, "Inställningar.xml");
+
+        if (!File.Exists(inställningsSökväg))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"Hittar inte inställningar {inställningsSökväg}!");
+            Console.ResetColor();
+            return 1;
+        }
+
+        //Läs in inställningar för första gången
+        currentSettings = LäsInställningar(inställningsSökväg);
+        if (currentSettings == null)
+        {
+            return 1;
+        }
+
+        SorteraBefintligaFiler(currentSettings);
+
+        //Starta bevakning av inmatningsmapparna
+        currentWatchers = StartaBevakning(currentSettings);
+
+        //Starta bevakning av själva konfigurationsfilen (Inställningar.xml)
+        configWatcher = new FileSystemWatcher(AppContext.BaseDirectory)
+        {
+            Filter = "Inställningar.xml",
+            EnableRaisingEvents = true
+        };
+
+        configWatcher.Changed += (sender, e) =>
+        {
+            //Undvik dubbelkörning om händelsen triggas flera gånger snabbt
+            if ((DateTime.Now - sistaOmladdning).TotalMilliseconds < 500)
+            {
+                return;
+            }
+            sistaOmladdning = DateTime.Now;
+
+            // Vänta en stund så att filen inte är låst av editorn
+            Thread.Sleep(200);
+
+            try
+            {
+                var nyaInställningar = LäsInställningar(inställningsSökväg);
+                if (nyaInställningar == null)
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine("Kunde inte läsa in nya inställningar (ogiltigt format). Behåller gamla.");
+                    Console.ResetColor();
+                    return;
+                }
+
+                //Stoppa och rensa gamla watchers
+                foreach (var w in currentWatchers)
+                {
+                    w.EnableRaisingEvents = false;
+                    w.Dispose();
+                }
+                currentWatchers.Clear();
+
+                currentSettings = nyaInställningar;
+
+                SorteraBefintligaFiler(currentSettings);
+
+                //Starta nya watchers
+                currentWatchers = StartaBevakning(currentSettings);
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("Inställningarna har laddats om!");
+                Console.ResetColor();
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Fel vid omladdning av inställningar: {ex.Message}");
+                Console.ResetColor();
+            }
+        };
+
+        Task.Delay(Timeout.Infinite).Wait();
+        return 0;
+    }
+
+    //Läser inställningar från XML-filen och kontrollerar att de är giltiga.
+    private static Settings? LäsInställningar(string sökväg)
+    {
+        XDocument xml;
+
+        try
+        {
+            xml = XDocument.Load(sökväg);
+        }
+        catch (Exception e)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"Reading Xml Failed: {e.Message}");
+            Console.ResetColor();
+            return null;
+        }
+
+        var settings = new Settings();
+
+        var root = xml.Root;
+        if (root == null || root.Name != "Settings")
+        {
+            Console.WriteLine("Roten i Inställningar.xml måste heta <Settings>");
+            return null;
+        }
+
+        //Hantera bakåtsnedstreck för plattformsoberoende loggsökväg
+        var log = root.Element("Log")?.Value.Trim().Replace('\\', Path.DirectorySeparatorChar);
+        if (string.IsNullOrWhiteSpace(log))
+        {
+            Console.WriteLine("<Log> saknas i Inställningar.xml");
+            return null;
+        }
+        settings.Log = log;
+
+        var directoryElements = root.Elements("Directory").ToList();
+        if (directoryElements.Count == 0)
+        {
+            Console.WriteLine("<Directory> saknas i Inställningar.xml");
+            return null;
+        }
+
+        foreach (var directoryElement in directoryElements)
+        {
+            var rule = new DirectoryRule();
+
+            var name = directoryElement.Element("Name")?.Value.Trim();
+
+            //Hantera bakåtsnedstreck även för Input och Output
+            var input = directoryElement.Element("Input")?.Value.Trim().Replace('\\', Path.DirectorySeparatorChar);
+            var output = directoryElement.Element("Output")?.Value.Trim().Replace('\\', Path.DirectorySeparatorChar);
+
+            if (string.IsNullOrWhiteSpace(name) ||
+                string.IsNullOrWhiteSpace(input) ||
+                string.IsNullOrWhiteSpace(output))
+            {
+                Console.WriteLine("<Name>, <Input> eller <Output> saknas i en <Directory>");
+                return null;
+            }
+
+            rule.Name = name;
+            rule.Input = input;
+            rule.Output = output;
+
+            foreach (var typeElement in directoryElement.Elements("Type"))
+            {
+                rule.Types.Add(typeElement.Value.Trim());
+            }
+
+            if (rule.Types.Count == 0)
+            {
+                Console.WriteLine($"<Type> saknas i <Directory> {rule.Name}");
+                return null;
+            }
+
+            settings.Directories.Add(rule);
+        }
+
+        try
+        {
+            foreach (var rule in settings.Directories)
+            {
+                if (!Directory.Exists(rule.Input))
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"Inmatningsmappen hittades inte: {rule.Input}");
+                    Console.ResetColor();
+                    return null;
+                }
+
+                if (!Directory.Exists(rule.Output))
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"Utmatningsmappen hittades inte: {rule.Output}");
+                    Console.ResetColor();
+                    return null;
+                }
+            }
+            var logMapp = Path.GetDirectoryName(settings.Log);
+            if (!string.IsNullOrWhiteSpace(logMapp) && !Directory.Exists(logMapp))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Loggfilens mapp hittades inte: {logMapp}");
+                Console.ResetColor();
+                return null;
+            }
+        }
+        catch (Exception e)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"Fel vid kontroll av mappar: {e.Message}");
+            Console.ResetColor();
+            return null;
+        }
+
+        return settings;
+    }
+
+    //Bevakar inmatningsmapparna efter nya filer.
+    private static List<FileSystemWatcher> StartaBevakning(Settings settings)
+    {
+        var watchers = new List<FileSystemWatcher>();
+
+        foreach (var rule in settings.Directories)
+        {
+            var watcher = new FileSystemWatcher(rule.Input);
+            watcher.Created += (sender, e) => HanteraFil(e.FullPath, rule, settings.Log);
+            watcher.EnableRaisingEvents = true;
+            watchers.Add(watcher);
+        }
+        return watchers;
+    }
+
+    //Sorterar filer som redan finns i inmatningsmapparna.
+    private static void SorteraBefintligaFiler(Settings settings)
+    {
+        foreach (var rule in settings.Directories)
+        {
+            if (Directory.Exists(rule.Input))
+            {
+                var filer = Directory.GetFiles(rule.Input);
+                foreach (var fil in filer)
+                {
+                    HanteraFil(fil, rule, settings.Log);
+                }
+            }
+        }
+    }
+
+    //Flyttar en fil till rätt utmatningsmapp och skriver till loggfilen.
+    private static void HanteraFil(string fil, DirectoryRule rule, string logPath)
+    {
+        try
+        {
+            string extension = Path.GetExtension(fil);
+            if (!rule.Types.Contains(extension, StringComparer.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            string desPath = Path.Combine(rule.Output, Path.GetFileName(fil));
+
+            for (int i = 0; i < 10; i++)
+            {
+                try
+                {
+                    File.Move(fil, desPath, true);
+
+                    string logMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Flyttade {Path.GetFileName(fil)} till {rule.Name}{Environment.NewLine}";
+                    File.AppendAllText(logPath, logMessage);
+                    break;
+                }
+                catch (IOException)
+                {
+                    if (i == 9) throw;
+                    Thread.Sleep(100);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"Fel vid hantering av fil {fil}: {e.Message}");
+            Console.ResetColor();
+        }
+    }
+}
