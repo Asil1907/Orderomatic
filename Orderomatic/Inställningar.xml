@@ -19,4 +19,14 @@
 		<Type>.txt</Type>
 		<Type>.pdf</Type>
 	</Directory>
+
+	<Directory>
+		<Name>Order</Name>
+		<Input>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\Order\Input</Input>
+		<Output>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\Order\Behandlade</Output>
+		<Export>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\Order\Export</Export>
+		<Error>C:\Users\Ilsbo\OneDrive\Unesco\Desktop\Exempel\Order\Fel</Error>
+		<Convert>C:\Users\Ilsbo\source\repos\Orderomatic\Blackbox\bin\Debug\net8.0\Blackbox.exe</Convert>
+		<Type>.xml</Type>
+	</Directory>
 </Settings>
