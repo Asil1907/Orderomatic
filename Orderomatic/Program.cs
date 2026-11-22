@@ -142,9 +142,12 @@ internal class Program
 
             var name = directoryElement.Element("Name")?.Value.Trim();
 
-            //Hantera bakåtsnedstreck även för Input och Output
+            //Hantera bakåtsnedstreck för alla sökvägar
             var input = directoryElement.Element("Input")?.Value.Trim().Replace('\\', Path.DirectorySeparatorChar);
             var output = directoryElement.Element("Output")?.Value.Trim().Replace('\\', Path.DirectorySeparatorChar);
+            var convert = directoryElement.Element("Convert")?.Value.Trim().Replace('\\', Path.DirectorySeparatorChar);
+            var export = directoryElement.Element("Export")?.Value.Trim().Replace('\\', Path.DirectorySeparatorChar);
+            var error = directoryElement.Element("Error")?.Value.Trim().Replace('\\', Path.DirectorySeparatorChar);
 
             if (string.IsNullOrWhiteSpace(name) ||
                 string.IsNullOrWhiteSpace(input) ||
@@ -154,9 +157,20 @@ internal class Program
                 return null;
             }
 
+            //En regel som konverterar måste veta var CSV-filer och trasiga order ska hamna
+            if (!string.IsNullOrWhiteSpace(convert) &&
+                (string.IsNullOrWhiteSpace(export) || string.IsNullOrWhiteSpace(error)))
+            {
+                Console.WriteLine($"<Export> och <Error> krävs när <Convert> finns i <Directory> {name}");
+                return null;
+            }
+
             rule.Name = name;
             rule.Input = input;
             rule.Output = output;
+            rule.Convert = convert;
+            rule.Export = export;
+            rule.Error = error;
 
             foreach (var typeElement in directoryElement.Elements("Type"))
             {
