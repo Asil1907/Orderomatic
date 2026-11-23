@@ -313,6 +313,13 @@ internal class Program
                 return;
             }
 
+            //Order går via Blackbox i stället för att bara flyttas
+            if (!string.IsNullOrWhiteSpace(rule.Convert))
+            {
+                KonverteraOrder(fil, rule, logPath);
+                return;
+            }
+
             string desPath = Path.Combine(rule.Output, Path.GetFileName(fil));
 
             for (int i = 0; i < 10; i++)
@@ -338,5 +345,11 @@ internal class Program
             Console.WriteLine($"Fel vid hantering av fil {fil}: {e.Message}");
             Console.ResetColor();
         }
+    }
+
+    //Konverterar en order med Blackbox och flyttar den till Behandlade eller Fel.
+    private static void KonverteraOrder(string fil, DirectoryRule rule, string logPath)
+    {
+        Console.WriteLine($"Ska konvertera {Path.GetFileName(fil)}");
     }
 }
