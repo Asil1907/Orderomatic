@@ -1,4 +1,5 @@
 
+using System.Diagnostics;
 using System.Xml.Linq;
 
 internal class Program
@@ -320,24 +321,8 @@ internal class Program
                 return;
             }
 
-            string desPath = Path.Combine(rule.Output, Path.GetFileName(fil));
-
-            for (int i = 0; i < 10; i++)
-            {
-                try
-                {
-                    File.Move(fil, desPath, true);
-
-                    string logMessage = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - Flyttade {Path.GetFileName(fil)} till {rule.Name}{Environment.NewLine}";
-                    File.AppendAllText(logPath, logMessage);
-                    break;
-                }
-                catch (IOException)
-                {
-                    if (i == 9) throw;
-                    Thread.Sleep(100);
-                }
-            }
+            FlyttaFil(fil, rule.Output);
+            Logga(logPath, $"Flyttade {Path.GetFileName(fil)} till {rule.Name}");
         }
         catch (Exception e)
         {
@@ -350,6 +335,106 @@ internal class Program
     //Konverterar en order med Blackbox och flyttar den till Behandlade eller Fel.
     private static void KonverteraOrder(string fil, DirectoryRule rule, string logPath)
     {
-        Console.WriteLine($"Ska konvertera {Path.GetFileName(fil)}");
+        VäntaPåFil(fil);
+
+        string filnamn = Path.GetFileName(fil);
+        string csvNamn = Path.ChangeExtension(filnamn, ".csv");
+        string csvSökväg = Path.Combine(rule.Export!, csvNamn);
+
+        //ArgumentList hanterar mellanslag i sökvägarna åt oss
+        var startInfo = new ProcessStartInfo(rule.Convert!)
+        {
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add(fil);
+        startInfo.ArgumentList.Add(csvSökväg);
+
+        int returkod;
+        string felmeddelande;
+
+        using (var process = Process.Start(startInfo)!)
+        {
+            //Läs felutskriften parallellt, annars kan Blackbox fastna om den skriver mycket
+            var felLäsning = process.StandardError.ReadToEndAsync();
+
+            if (process.WaitForExit(10000))
+            {
+                returkod = process.ExitCode;
+                felmeddelande = felLäsning.Result.Trim();
+            }
+            else
+            {
+                process.Kill(true);
+                returkod = -1;
+                felmeddelande = "Blackbox svarade inte inom 10 sekunder";
+            }
+        }
+
+        if (returkod == 0)
+        {
+            FlyttaFil(fil, rule.Output);
+            Logga(logPath, $"Konverterade {filnamn} till {csvNamn}");
+        }
+        else
+        {
+            //En halvfärdig CSV-fil ska inte ligga kvar och se korrekt ut
+            if (File.Exists(csvSökväg))
+            {
+                File.Delete(csvSökväg);
+            }
+
+            FlyttaFil(fil, rule.Error!);
+            Logga(logPath, $"Kunde inte konvertera {filnamn}: {felmeddelande}");
+
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"Order {filnamn} flyttades till Fel: {felmeddelande}");
+            Console.ResetColor();
+        }
+    }
+
+    //Väntar tills ingen annan använder filen, till exempel medan den fortfarande kopieras in.
+    private static void VäntaPåFil(string fil)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            try
+            {
+                using var ström = File.Open(fil, FileMode.Open, FileAccess.Read, FileShare.None);
+                return;
+            }
+            catch (IOException)
+            {
+                if (i == 9) throw;
+                Thread.Sleep(100);
+            }
+        }
+    }
+
+    //Flyttar en fil till en mapp och försöker igen om filen är upptagen.
+    private static void FlyttaFil(string fil, string mapp)
+    {
+        string mål = Path.Combine(mapp, Path.GetFileName(fil));
+
+        for (int i = 0; i < 10; i++)
+        {
+            try
+            {
+                File.Move(fil, mål, true);
+                return;
+            }
+            catch (IOException)
+            {
+                if (i == 9) throw;
+                Thread.Sleep(100);
+            }
+        }
+    }
+
+    //Skriver en rad med tidsstämpel till loggfilen.
+    private static void Logga(string logPath, string meddelande)
+    {
+        File.AppendAllText(logPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {meddelande}{Environment.NewLine}");
     }
 }
