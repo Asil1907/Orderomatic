@@ -205,6 +205,43 @@ internal class Program
                     Console.ResetColor();
                     return null;
                 }
+
+                //Bara regler som konverterar har Convert, Export och Error
+                if (!string.IsNullOrWhiteSpace(rule.Convert))
+                {
+                    if (!File.Exists(rule.Convert))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"Konverteringsprogrammet hittades inte: {rule.Convert}");
+                        Console.ResetColor();
+                        return null;
+                    }
+
+                    if (!Directory.Exists(rule.Export))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"Exportmappen hittades inte: {rule.Export}");
+                        Console.ResetColor();
+                        return null;
+                    }
+
+                    if (!Directory.Exists(rule.Error))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"Felmappen hittades inte: {rule.Error}");
+                        Console.ResetColor();
+                        return null;
+                    }
+
+                    //Export och Error får inte vara samma mapp som Input, annars bevakar programmet sina egna filer
+                    if (SammaMapp(rule.Export!, rule.Input) || SammaMapp(rule.Error!, rule.Input))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.WriteLine($"Export- och felmappen får inte vara samma som Input i {rule.Name}");
+                        Console.ResetColor();
+                        return null;
+                    }
+                }
             }
             var logMapp = Path.GetDirectoryName(settings.Log);
             if (!string.IsNullOrWhiteSpace(logMapp) && !Directory.Exists(logMapp))
@@ -224,6 +261,14 @@ internal class Program
         }
 
         return settings;
+    }
+
+    //Jämför två mappsökvägar efter att de gjorts fullständiga, så att till exempel "C:\Order\" och "c:/order" räknas som samma.
+    private static bool SammaMapp(string a, string b)
+    {
+        var fullA = Path.TrimEndingDirectorySeparator(Path.GetFullPath(a));
+        var fullB = Path.TrimEndingDirectorySeparator(Path.GetFullPath(b));
+        return string.Equals(fullA, fullB, StringComparison.OrdinalIgnoreCase);
     }
 
     //Bevakar inmatningsmapparna efter nya filer.
