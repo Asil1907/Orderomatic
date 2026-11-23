@@ -1,5 +1,7 @@
 # Orderomatic
 
+<img src="logo.png" alt="Orderomatic" width="120">
+
 Automatisk inläsning och validering av kundorder i XML-filer, med konvertering till CSV, felhantering och loggning – byggt som en vidareutveckling av Sortomatic i C# och .NET 8.
 
 ## Om projektet
