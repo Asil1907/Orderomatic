@@ -127,3 +127,7 @@ Loggen skrivs till filen som anges i `<Log>`. Varje rad har en tidsstämpel och 
 - Räkna om ordervärdet till SEK med ett valutakurs-API, och hantera saknade kurser eller timeout utan att ordern stoppas
 - Dra orderraderna från ett lagersaldo eller kontrollera artiklar och lagersaldo innan ordern exporteras
 - Lägga till enhetstester för konvertering, felhantering och inställningar, och köra dem i en CI-pipeline (till exempel på Linux)
+
+## Användning av AI
+
+Jag har använt Claude som stöd för kodexempel, felsökning och dokumentation.
